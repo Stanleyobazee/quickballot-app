@@ -1,0 +1,45 @@
+# --- Secrets / env ---
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+*.pfx
+secrets/
+
+# --- Terraform ---
+terraform/**/.terraform/
+terraform/**/*.tfstate
+terraform/**/*.tfstate.*
+terraform/**/*.tfvars
+!terraform/**/*.tfvars.example
+terraform/**/crash.log
+terraform/**/.terraform.lock.hcl
+
+# --- Node / Next.js (vote-ui) ---
+vote-ui/node_modules/
+vote-ui/.next/
+vote-ui/out/
+vote-ui/npm-debug.log*
+
+# --- Java / Spring Boot (vote-api) ---
+vote-api/target/
+vote-api/.mvn/
+vote-api/*.class
+vote-api/HELP.md
+
+# --- Python / FastAPI (results-api) ---
+results-api/__pycache__/
+results-api/*.pyc
+results-api/.venv/
+results-api/venv/
+
+# --- Kubernetes ---
+k8s/**/*-secret.yaml
+k8s/**/kubeconfig*
+
+# --- OS / editor ---
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
