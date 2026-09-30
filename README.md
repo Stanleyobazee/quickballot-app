@@ -16,7 +16,7 @@ Polyglot microservices voting app — capstone project for Borderless Tech Acade
 Target: submit by **2026-10-16** (1 month from kickoff).
 
 - [ ] **Phase 1 — Foundation** (Linux, Bash, Networking, Git)
-  - [ ] Ubuntu server provisioned (EC2), non-root sudo user, SSH key-only auth
+  - [ ] Ubuntu server provisioned (local VirtualBox VM), non-root sudo user, SSH key-only auth
   - [ ] UFW firewall configured
   - [ ] Idempotent setup script (`scripts/setup-server.sh`) — Docker, Nginx, swap, fail2ban
   - [ ] VPC subnetting plan sketched (`docs/vpc-subnetting-plan.md`)
@@ -71,6 +71,9 @@ quickballot-app/
 
 ## Local decisions log
 
-- **Phase 1 server**: AWS EC2 (not a local VM/WSL2) — reuses the AWS account we
-  already have, gives real internet-facing SSH/UFW practice, and the instance
-  can be torn down cheaply between sessions.
+- **Phase 1 server**: local VirtualBox VM (not EC2, not WSL2) — the
+  assignment allows "local VM or EC2" for Phase 1, and a real VM keeps the
+  host/guest boundary clean (SSH into it from Windows like a remote box,
+  genuine UFW/fail2ban lockout risk) in a way WSL2's blurred networking
+  doesn't. No AWS spend for this throwaway practice box either. See
+  [docs/phase1-foundation.md](docs/phase1-foundation.md).

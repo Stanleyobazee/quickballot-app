@@ -43,9 +43,9 @@ group. Nothing else can reach it, not even other things in the private subnet.
 - `sg-alb` — inbound 80/443 from `0.0.0.0/0` (it's the public entry point),
   outbound to `sg-eks-nodes`.
 
-## Phase 1 EC2 (temporary, not part of final architecture)
+## Phase 1 practice box (temporary, not part of final architecture)
 
-The Phase 1 practice server (Linux admin / bash / UFW exercise) is a
-standalone EC2 instance in the **default VPC**, not this custom one — it gets
-terminated once Phase 1 is done. The custom VPC above only gets built in
-Phase 3, in Terraform, and that's what EKS/RDS actually live in.
+The Phase 1 practice server (Linux admin / bash / UFW exercise) is a local
+VirtualBox VM, not AWS infrastructure at all — it gets discarded once Phase 1
+is done. The custom VPC above only gets built in Phase 3, in Terraform, and
+that's what EKS/RDS actually live in.
