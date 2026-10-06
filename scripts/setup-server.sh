@@ -1,104 +1,108 @@
 #!/usr/bin/env bash
-#
-# QuickBallot - Phase 1 server bootstrap
-# Idempotent: safe to run multiple times on the same Ubuntu host.
-# Installs: Docker, Nginx, fail2ban, a swap file, and baseline hardening.
-#
-# Usage: sudo ./setup-server.sh
-
+# scripts/setup-server.sh
+# Idempotent provisioning script for quickballot-dev VM.
+# Safe to run multiple times — already-installed tools are skipped.
 set -euo pipefail
 
-SWAP_FILE="/swapfile"
-SWAP_SIZE_GB="2"
+echo "==> Updating package index"
+apt-get update -qq
 
-log() { echo -e "\n[setup] $*"; }
-
-if [[ $EUID -ne 0 ]]; then
-  echo "Run this script with sudo: sudo $0" >&2
-  exit 1
+# ── Swap file (2 GB) ────────────────────────────────────────────────────────
+if [ ! -f /swapfile ]; then
+  echo "==> Creating 2 GB swap file"
+  fallocate -l 2G /swapfile
+  chmod 600 /swapfile
+  mkswap /swapfile
+  swapon /swapfile
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
+else
+  echo "==> Swap file already exists, skipping"
 fi
 
-log "Updating package index"
-apt-get update -y
+# ── Core utilities ───────────────────────────────────────────────────────────
+echo "==> Installing core utilities"
+apt-get install -y -qq \
+  curl \
+  git \
+  unzip \
+  ca-certificates \
+  gnupg \
+  lsb-release \
+  software-properties-common
 
-log "Installing base packages (curl, ufw, fail2ban, nginx, unattended-upgrades)"
-apt-get install -y \
-  ca-certificates curl gnupg lsb-release \
-  ufw fail2ban nginx unattended-upgrades
-
-# --- Docker (official repo, idempotent) -------------------------------------
+# ── Docker CE ────────────────────────────────────────────────────────────────
 if ! command -v docker &>/dev/null; then
-  log "Installing Docker Engine"
+  echo "==> Installing Docker CE"
   install -m 0755 -d /etc/apt/keyrings
-  if [[ ! -f /etc/apt/keyrings/docker.gpg ]]; then
-    curl -fsSL https://download.docker.com/linux/ubuntu/gpg | \
-      gpg --dearmor -o /etc/apt/keyrings/docker.gpg
-    chmod a+r /etc/apt/keyrings/docker.gpg
-  fi
-  ARCH="$(dpkg --print-architecture)"
-  CODENAME="$(. /etc/os-release && echo "$VERSION_CODENAME")"
-  echo "deb [arch=${ARCH} signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu ${CODENAME} stable" \
+  curl -fsSL https://download.docker.com/linux/ubuntu/gpg \
+    | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+  chmod a+r /etc/apt/keyrings/docker.gpg
+  echo \
+    "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] \
+    https://download.docker.com/linux/ubuntu \
+    $(lsb_release -cs) stable" \
     > /etc/apt/sources.list.d/docker.list
-  apt-get update -y
-  apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+  apt-get update -qq
+  apt-get install -y -qq \
+    docker-ce \
+    docker-ce-cli \
+    containerd.io \
+    docker-buildx-plugin \
+    docker-compose-plugin
+  systemctl enable --now docker
 else
-  log "Docker already installed, skipping"
+  echo "==> Docker already installed, skipping"
 fi
 
-# Let the invoking sudo user run docker without sudo (if not already a member)
-TARGET_USER="${SUDO_USER:-}"
-if [[ -n "$TARGET_USER" ]] && ! id -nG "$TARGET_USER" | grep -qw docker; then
-  log "Adding $TARGET_USER to the docker group (re-login required to take effect)"
-  usermod -aG docker "$TARGET_USER"
+# Add the invoking user to the docker group (requires logout/login to take effect)
+SUDO_USER="${SUDO_USER:-}"
+if [ -n "$SUDO_USER" ]; then
+  usermod -aG docker "$SUDO_USER"
+  echo "==> Added $SUDO_USER to docker group (log out and back in to activate)"
 fi
 
-systemctl enable --now docker
-
-# --- Swap file ---------------------------------------------------------------
-if [[ -f "$SWAP_FILE" ]]; then
-  log "Swap file already exists, skipping"
+# ── Node.js 20 (NodeSource) ──────────────────────────────────────────────────
+if ! command -v node &>/dev/null || [[ "$(node --version)" != v20* ]]; then
+  echo "==> Installing Node.js 20"
+  curl -fsSL https://deb.nodesource.com/setup_20.x | bash -
+  apt-get install -y -qq nodejs
 else
-  log "Creating ${SWAP_SIZE_GB}G swap file"
-  fallocate -l "${SWAP_SIZE_GB}G" "$SWAP_FILE"
-  chmod 600 "$SWAP_FILE"
-  mkswap "$SWAP_FILE"
-  swapon "$SWAP_FILE"
+  echo "==> Node.js 20 already installed, skipping"
 fi
 
-if ! grep -q "^${SWAP_FILE} " /etc/fstab; then
-  log "Persisting swap file in /etc/fstab"
-  echo "${SWAP_FILE} none swap sw 0 0" >> /etc/fstab
+# ── Python 3 + pip ───────────────────────────────────────────────────────────
+echo "==> Installing Python 3 and pip"
+apt-get install -y -qq python3 python3-pip python3-venv
+
+# ── nginx ────────────────────────────────────────────────────────────────────
+if ! command -v nginx &>/dev/null; then
+  echo "==> Installing nginx"
+  apt-get install -y -qq nginx
+  systemctl enable nginx
+else
+  echo "==> nginx already installed, skipping"
 fi
 
-# --- fail2ban ------------------------------------------------------------
-if [[ ! -f /etc/fail2ban/jail.local ]]; then
-  log "Writing fail2ban jail.local (sshd protection)"
-  cat > /etc/fail2ban/jail.local <<'EOF'
-[sshd]
-enabled = true
-port    = ssh
-maxretry = 5
-bantime  = 1h
-findtime = 10m
-EOF
+# ── fail2ban ─────────────────────────────────────────────────────────────────
+if ! systemctl is-active --quiet fail2ban 2>/dev/null; then
+  echo "==> Installing fail2ban"
+  apt-get install -y -qq fail2ban
+  systemctl enable --now fail2ban
+else
+  echo "==> fail2ban already running, skipping"
 fi
-systemctl enable --now fail2ban
-systemctl restart fail2ban
 
-# --- Nginx -----------------------------------------------------------------
-systemctl enable --now nginx
-
-# --- UFW ---------------------------------------------------------------------
-log "Configuring UFW (deny incoming by default, allow SSH/HTTP/HTTPS only)"
+# ── UFW firewall ─────────────────────────────────────────────────────────────
+echo "==> Configuring UFW"
+ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
-ufw allow OpenSSH
+ufw allow ssh
 ufw allow 80/tcp
 ufw allow 443/tcp
 ufw --force enable
 
-log "Done. Versions:"
-docker --version
-nginx -v
-fail2ban-client --version | head -1
-ufw status verbose
+echo ""
+echo "==> Provisioning complete."
+echo "    If this was the first run, log out and back in so docker group membership takes effect."
+echo "    Verify with: docker run hello-world"
