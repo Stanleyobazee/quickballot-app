@@ -10,8 +10,9 @@ interface Poll {
 
 async function getPolls(): Promise<Poll[]> {
   try {
+    const baseUrl = process.env.VOTE_API_INTERNAL_URL || process.env.NEXT_PUBLIC_VOTE_API_URL;
     const res = await fetch(
-      `${process.env.NEXT_PUBLIC_VOTE_API_URL}/api/polls`,
+      `${baseUrl}/api/polls`,
       { cache: "no-store" }
     );
     if (!res.ok) return [];
@@ -61,12 +62,6 @@ export default async function HomePage() {
                     backgroundColor: "var(--navy-800)",
                     border: "1px solid var(--navy-700)",
                   }}
-                  onMouseEnter={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--indigo)")
-                  }
-                  onMouseLeave={(e) =>
-                    (e.currentTarget.style.borderColor = "var(--navy-700)")
-                  }
                 >
                   <p
                     className="text-base font-semibold mb-2 leading-snug"

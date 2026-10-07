@@ -17,10 +17,18 @@ interface Poll {
   options: Option[];
 }
 
+function generateUUID(): string {
+  return "xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx".replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === "x" ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 function getOrCreateVoterToken(): string {
   let token = localStorage.getItem("quickballot_voter_token");
   if (!token) {
-    token = crypto.randomUUID();
+    token = generateUUID();
     localStorage.setItem("quickballot_voter_token", token);
   }
   return token;
@@ -150,17 +158,13 @@ export default function PollPage() {
               className="w-full text-left px-5 py-4 rounded-xl transition-all duration-150 font-medium text-base"
               style={{
                 backgroundColor:
-                  selected === opt.id
-                    ? "rgba(79,70,229,0.2)"
-                    : "var(--navy-800)",
+                  selected === opt.id ? "rgba(79,70,229,0.2)" : "var(--navy-800)",
                 border:
                   selected === opt.id
                     ? "1px solid var(--indigo)"
                     : "1px solid var(--navy-700)",
                 color:
-                  selected === opt.id
-                    ? "var(--surface)"
-                    : "var(--text-muted)",
+                  selected === opt.id ? "var(--surface)" : "var(--text-muted)",
               }}
             >
               {opt.label}

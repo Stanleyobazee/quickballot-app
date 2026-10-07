@@ -30,7 +30,7 @@ services:
       DB_NAME: quickballot
       DB_USER: postgres
       DB_PASSWORD: postgres
-      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      CORS_ALLOWED_ORIGINS: http://192.168.178.139:3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -48,7 +48,7 @@ services:
       DB_NAME: quickballot
       DB_USER: postgres
       DB_PASSWORD: postgres
-      CORS_ALLOWED_ORIGINS: http://localhost:3000
+      CORS_ALLOWED_ORIGINS: http://192.168.178.139:3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,8 +61,10 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_VOTE_API_URL: http://localhost:8080
-      NEXT_PUBLIC_RESULTS_API_URL: http://localhost:8000
+      NEXT_PUBLIC_VOTE_API_URL: http://192.168.178.139:8080
+      NEXT_PUBLIC_RESULTS_API_URL: http://192.168.178.139:8000
+      VOTE_API_INTERNAL_URL: http://vote-api:8080
+      RESULTS_API_INTERNAL_URL: http://results-api:8000
     depends_on:
       - vote-api
       - results-api
