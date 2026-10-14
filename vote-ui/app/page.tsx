@@ -1,4 +1,9 @@
 import Link from "next/link";
+import { shuffle } from "@/lib/shuffle";
+
+// Render on every request so each load gets a fresh shuffle. The shuffle runs
+// only in this Server Component, so the client hydrates the same markup.
+export const dynamic = "force-dynamic";
 
 interface Poll {
   id: string;
@@ -23,7 +28,7 @@ async function getPolls(): Promise<Poll[]> {
 }
 
 export default async function HomePage() {
-  const polls = await getPolls();
+  const polls = shuffle(await getPolls());
 
   return (
     <div>
