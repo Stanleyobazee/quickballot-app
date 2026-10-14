@@ -5,14 +5,14 @@ services:
     networks:
       - quickballot-network
     environment:
-      POSTGRES_DB: quickballot
-      POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: ${DB_NAME}
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is not set in .env}
     volumes:
       - quickballot-postgres-data:/var/lib/postgresql/data
       - ./scripts/schema.sql:/docker-entrypoint-initdb.d/schema.sql:ro
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U postgres"]
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -27,10 +27,10 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: quickballot
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      CORS_ALLOWED_ORIGINS: http://192.168.178.139:3000
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is not set in .env}
+      CORS_ALLOWED_ORIGINS: http://${PUBLIC_HOST:?PUBLIC_HOST is not set in .env}:3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -45,10 +45,10 @@ services:
     environment:
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_NAME: quickballot
-      DB_USER: postgres
-      DB_PASSWORD: postgres
-      CORS_ALLOWED_ORIGINS: http://192.168.178.139:3000
+      DB_NAME: ${DB_NAME}
+      DB_USER: ${DB_USER}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is not set in .env}
+      CORS_ALLOWED_ORIGINS: http://${PUBLIC_HOST:?PUBLIC_HOST is not set in .env}:3000
     depends_on:
       postgres:
         condition: service_healthy
@@ -61,8 +61,8 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_VOTE_API_URL: http://192.168.178.139:8080
-      NEXT_PUBLIC_RESULTS_API_URL: http://192.168.178.139:8000
+      NEXT_PUBLIC_VOTE_API_URL: http://${PUBLIC_HOST:?PUBLIC_HOST is not set in .env}:8080
+      NEXT_PUBLIC_RESULTS_API_URL: http://${PUBLIC_HOST:?PUBLIC_HOST is not set in .env}:8000
       VOTE_API_INTERNAL_URL: http://vote-api:8080
       RESULTS_API_INTERNAL_URL: http://results-api:8000
     depends_on:
