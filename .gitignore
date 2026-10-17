@@ -42,3 +42,5 @@ k8s/**/kubeconfig*
 Thumbs.db
 .vscode/
 .idea/
+__pycache__/
+*.pyc
