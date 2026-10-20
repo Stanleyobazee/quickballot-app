@@ -24,7 +24,6 @@ vote-ui/npm-debug.log*
 
 # --- Java / Spring Boot (vote-api) ---
 vote-api/target/
-vote-api/.mvn/
 vote-api/*.class
 vote-api/HELP.md
 
@@ -43,3 +42,5 @@ k8s/**/kubeconfig*
 Thumbs.db
 .vscode/
 .idea/
+__pycache__/
+*.pyc

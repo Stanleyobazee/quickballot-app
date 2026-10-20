@@ -1,0 +1,18 @@
+# Build output (the Dockerfile builds its own inside the builder stage)
+target/
+
+# Version control and editor files
+.git
+.gitignore
+.gitattributes
+.idea/
+.vscode/
+*.iml
+
+# Docs and local files
+HELP.md
+*.md
+
+# Secrets must never end up in an image layer
+.env
+.env.*

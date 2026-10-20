@@ -5,3 +5,7 @@ __pycache__
 .env.local
 .venv
 venv
+
+# Never bake env files into the image
+.env
+.env.*

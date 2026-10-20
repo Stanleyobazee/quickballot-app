@@ -4,6 +4,11 @@
 # Safe to run multiple times — already-installed tools are skipped.
 set -euo pipefail
 
+if [ "$EUID" -ne 0 ]; then
+  echo "Error: this script must be run as root. Re-run with: sudo $0" >&2
+  exit 1
+fi
+
 echo "==> Updating package index"
 apt-get update -qq
 
@@ -14,9 +19,13 @@ if [ ! -f /swapfile ]; then
   chmod 600 /swapfile
   mkswap /swapfile
   swapon /swapfile
-  echo '/swapfile none swap sw 0 0' >> /etc/fstab
 else
-  echo "==> Swap file already exists, skipping"
+  echo "==> Swap file already exists, skipping creation"
+fi
+
+if [ -f /swapfile ] && ! grep -qE '^/swapfile[[:space:]]' /etc/fstab; then
+  echo "==> Adding /swapfile to /etc/fstab"
+  echo '/swapfile none swap sw 0 0' >> /etc/fstab
 fi
 
 # ── Core utilities ───────────────────────────────────────────────────────────
@@ -55,8 +64,7 @@ else
 fi
 
 # Add the invoking user to the docker group (requires logout/login to take effect)
-SUDO_USER="${SUDO_USER:-}"
-if [ -n "$SUDO_USER" ]; then
+if [ -n "${SUDO_USER:-}" ] && ! id -nG "$SUDO_USER" | tr ' ' '\n' | grep -qx docker; then
   usermod -aG docker "$SUDO_USER"
   echo "==> Added $SUDO_USER to docker group (log out and back in to activate)"
 fi
@@ -94,7 +102,6 @@ fi
 
 # ── UFW firewall ─────────────────────────────────────────────────────────────
 echo "==> Configuring UFW"
-ufw --force reset
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow ssh

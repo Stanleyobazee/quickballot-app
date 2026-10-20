@@ -34,6 +34,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:8080/actuator/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 40s
 
   results-api:
     build: ./results-api
@@ -52,6 +58,12 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "python -c \"import urllib.request; urllib.request.urlopen('http://127.0.0.1:8000/health', timeout=3)\""]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
 
   vote-ui:
     build: ./vote-ui
@@ -66,8 +78,16 @@ services:
       VOTE_API_INTERNAL_URL: http://vote-api:8080
       RESULTS_API_INTERNAL_URL: http://results-api:8000
     depends_on:
-      - vote-api
-      - results-api
+      vote-api:
+        condition: service_healthy
+      results-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://$$(hostname):3000/api/health >/dev/null || exit 1"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
 networks:
   quickballot-network:
