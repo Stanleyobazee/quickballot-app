@@ -44,3 +44,12 @@ Thumbs.db
 .idea/
 __pycache__/
 *.pyc
+
+# Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfvars
+crash.log
+tfplan
+!terraform/**/.terraform.lock.hcl
