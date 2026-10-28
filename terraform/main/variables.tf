@@ -33,3 +33,9 @@ variable "database_subnet_cidrs" {
   type        = list(string)
   default     = ["10.0.96.0/24", "10.0.97.0/24", "10.0.98.0/24"]
 }
+
+variable "enable_nat_gateway" {
+  description = "Create the NAT gateway and its Elastic IP (billed by the hour). Keep false when nothing in the private subnets needs the internet."
+  type        = bool
+  default     = false
+}
