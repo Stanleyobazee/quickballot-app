@@ -14,7 +14,7 @@ terraform/**/*.tfstate.*
 terraform/**/*.tfvars
 !terraform/**/*.tfvars.example
 terraform/**/crash.log
-terraform/**/.terraform.lock.hcl
+tfplan
 
 # --- Node / Next.js (vote-ui) ---
 vote-ui/node_modules/
@@ -44,12 +44,3 @@ Thumbs.db
 .idea/
 __pycache__/
 *.pyc
-
-# Terraform
-.terraform/
-*.tfstate
-*.tfstate.*
-*.tfvars
-crash.log
-tfplan
-!terraform/**/.terraform.lock.hcl
