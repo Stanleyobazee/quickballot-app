@@ -39,3 +39,9 @@ variable "enable_nat_gateway" {
   type        = bool
   default     = false
 }
+
+variable "single_nat_gateway" {
+  description = "Use one shared NAT gateway (cheapest) or one per availability zone (resilient, about three times the hourly cost)"
+  type        = bool
+  default     = true
+}

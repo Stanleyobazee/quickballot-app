@@ -14,6 +14,7 @@ output "database_subnet_ids" {
   value = aws_subnet.database[*].id
 }
 
-output "nat_gateway_id" {
-  value = one(aws_nat_gateway.main[*].id)
+output "nat_gateway_ids" {
+  description = "IDs of the NAT gateways (empty when enable_nat_gateway is false)"
+  value       = aws_nat_gateway.main[*].id
 }

@@ -73,14 +73,6 @@ resource "aws_route" "public_internet" {
   gateway_id             = aws_internet_gateway.main.id
 }
 
-resource "aws_route_table" "private" {
-  vpc_id = aws_vpc.main.id
-
-  tags = {
-    Name = "${var.project}-private-rt"
-  }
-}
-
 resource "aws_route_table" "database" {
   vpc_id = aws_vpc.main.id
 
@@ -95,14 +87,29 @@ resource "aws_route_table_association" "public" {
   route_table_id = aws_route_table.public.id
 }
 
-resource "aws_route_table_association" "private" {
-  count          = length(aws_subnet.private)
-  subnet_id      = aws_subnet.private[count.index].id
-  route_table_id = aws_route_table.private.id
-}
-
 resource "aws_route_table_association" "database" {
   count          = length(aws_subnet.database)
   subnet_id      = aws_subnet.database[count.index].id
   route_table_id = aws_route_table.database.id
+}
+
+resource "aws_route_table" "private" {
+  count  = length(var.private_subnet_cidrs)
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project}-private-${local.azs[count.index]}-rt"
+  }
+}
+
+resource "aws_route_table_association" "private" {
+  count          = length(aws_subnet.private)
+  subnet_id      = aws_subnet.private[count.index].id
+  route_table_id = aws_route_table.private[count.index].id
+}
+
+# The single private route table became one per availability zone.
+moved {
+  from = aws_route_table.private
+  to   = aws_route_table.private[0]
 }
