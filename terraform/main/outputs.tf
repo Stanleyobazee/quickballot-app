@@ -18,3 +18,8 @@ output "nat_gateway_ids" {
   description = "IDs of the NAT gateways (empty when enable_nat_gateway is false)"
   value       = aws_nat_gateway.main[*].id
 }
+
+output "ecr_repository_urls" {
+  description = "Repository URLs by service"
+  value       = { for name, repo in aws_ecr_repository.service : name => repo.repository_url }
+}

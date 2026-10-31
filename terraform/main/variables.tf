@@ -45,3 +45,9 @@ variable "single_nat_gateway" {
   type        = bool
   default     = true
 }
+
+variable "services" {
+  description = "Services that get their own container repository"
+  type        = list(string)
+  default     = ["vote-ui", "vote-api", "results-api"]
+}
