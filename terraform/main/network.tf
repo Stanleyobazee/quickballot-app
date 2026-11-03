@@ -113,3 +113,26 @@ moved {
   from = aws_route_table.private
   to   = aws_route_table.private[0]
 }
+
+# Manage the VPC's default security group with no rules so that resources
+# accidentally attached to it have neither inbound nor outbound access.
+resource "aws_default_security_group" "default" {
+  vpc_id = aws_vpc.main.id
+
+  tags = {
+    Name = "${var.project}-default-sg"
+  }
+}
+
+# Gateway endpoint that routes S3 traffic (for example ECR image layers)
+# privately instead of through the NAT gateway. Uses the default endpoint policy.
+resource "aws_vpc_endpoint" "s3" {
+  vpc_id            = aws_vpc.main.id
+  service_name      = "com.amazonaws.${var.region}.s3"
+  vpc_endpoint_type = "Gateway"
+  route_table_ids   = aws_route_table.private[*].id
+
+  tags = {
+    Name = "${var.project}-s3-endpoint"
+  }
+}
