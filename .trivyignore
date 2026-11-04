@@ -1,0 +1,6 @@
+# AWS-0132: the Terraform state bucket is encrypted with an AWS-managed key (SSE-S3)
+# rather than a customer-managed KMS key.
+# Accepted: single account, single administrator, short-lived and cost-controlled
+# environment. The bucket is private, versioned, TLS-only and encrypted at rest.
+# Revisit if state ever holds secrets or the environment becomes long-lived.
+AWS-0132
