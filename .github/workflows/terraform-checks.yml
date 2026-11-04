@@ -1,0 +1,52 @@
+name: terraform-checks
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: terraform-checks-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_VERSION: "1.17.0"
+
+jobs:
+  fmt:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - run: terraform fmt -check -recursive -diff terraform
+
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [bootstrap, main, dns]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+      - name: Init without backend
+        working-directory: terraform/${{ matrix.stack }}
+        run: terraform init -backend=false -input=false
+      - name: Validate
+        working-directory: terraform/${{ matrix.stack }}
+        run: terraform validate
+
+  tflint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: terraform-linters/setup-tflint@v4
+      - name: Lint all stacks
+        working-directory: terraform
+        run: tflint --recursive
