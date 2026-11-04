@@ -2,7 +2,6 @@ terraform {
   required_version = ">= 1.10"
 
   backend "s3" {
-    bucket       = "quickballot-tfstate-937113531334"
     key          = "main/terraform.tfstate"
     region       = "eu-north-1"
     encrypt      = true

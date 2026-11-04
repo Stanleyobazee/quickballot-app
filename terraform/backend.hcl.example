@@ -1,0 +1,3 @@
+# Copy to backend.hcl and set the name of your state bucket.
+# Used as: terraform init -backend-config=../backend.hcl
+bucket = "<state-bucket-name>"
