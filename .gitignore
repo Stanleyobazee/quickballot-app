@@ -44,3 +44,6 @@ Thumbs.db
 .idea/
 __pycache__/
 *.pyc
+
+# Backend settings with the real state bucket name
+terraform/backend.hcl
