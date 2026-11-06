@@ -52,7 +52,7 @@ export default function PollPage() {
       return;
     }
 
-    fetch(`${process.env.NEXT_PUBLIC_VOTE_API_URL}/api/polls/${id}`)
+    fetch(`/api/polls/${id}`)
       .then((r) => r.json())
       .then((data) => {
         if (data.status === "closed") {
@@ -74,7 +74,7 @@ export default function PollPage() {
 
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_VOTE_API_URL}/api/polls/${id}/votes`,
+        `/api/polls/${id}/votes`,
         {
           method: "POST",
           headers: { "Content-Type": "application/json" },
