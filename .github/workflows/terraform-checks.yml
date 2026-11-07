@@ -18,8 +18,8 @@ jobs:
   fmt:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - run: terraform fmt -check -recursive -diff terraform
@@ -31,8 +31,8 @@ jobs:
       matrix:
         stack: [bootstrap, main, dns]
     steps:
-      - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
         with:
           terraform_version: ${{ env.TF_VERSION }}
       - name: Init without backend
@@ -45,8 +45,8 @@ jobs:
   tflint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: terraform-linters/setup-tflint@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: terraform-linters/setup-tflint@90f302c255ef959cbfb4bd10581afecdb7ece3e6 # v4
       - name: Lint all stacks
         working-directory: terraform
         run: tflint --recursive
@@ -54,7 +54,7 @@ jobs:
   security-scan:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
       - name: Scan Terraform for misconfigurations
         uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
         with:
@@ -63,3 +63,4 @@ jobs:
           severity: HIGH,CRITICAL
           exit-code: "1"
           format: table
+          trivyignores: .trivyignore.yaml

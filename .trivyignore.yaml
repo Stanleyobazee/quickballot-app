@@ -1,0 +1,6 @@
+misconfigurations:
+  - id: AWS-0132
+    paths:
+      - "bootstrap/main.tf"
+      - "terraform/bootstrap/main.tf"
+    statement: "State bucket uses SSE-S3 instead of a customer-managed KMS key. Accepted for a short-lived, single-account, cost-controlled environment. Revisit if state ever holds secrets or the environment becomes long-lived."
