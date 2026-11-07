@@ -73,8 +73,6 @@ services:
     ports:
       - "3000:3000"
     environment:
-      NEXT_PUBLIC_VOTE_API_URL: http://${PUBLIC_HOST:?PUBLIC_HOST is not set in .env}:8080
-      NEXT_PUBLIC_RESULTS_API_URL: http://${PUBLIC_HOST:?PUBLIC_HOST is not set in .env}:8000
       VOTE_API_INTERNAL_URL: http://vote-api:8080
       RESULTS_API_INTERNAL_URL: http://results-api:8000
     depends_on:

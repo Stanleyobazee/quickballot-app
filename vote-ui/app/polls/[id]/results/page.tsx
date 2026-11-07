@@ -28,7 +28,7 @@ export default function ResultsPage() {
   const fetchResults = useCallback(async () => {
     try {
       const res = await fetch(
-        `${process.env.NEXT_PUBLIC_RESULTS_API_URL}/api/results/${id}`,
+        `/api/results/${id}`,
         { cache: "no-store" }
       );
       if (!res.ok) throw new Error("Failed to fetch");
