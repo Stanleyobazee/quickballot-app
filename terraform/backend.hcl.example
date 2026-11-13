@@ -1,3 +1,11 @@
-# Copy to backend.hcl and set the name of your state bucket.
-# Used as: terraform init -backend-config=../backend.hcl
+# Backend settings shared by every stack. The bucket name is kept out of the code.
+# Copy this file to backend.hcl (git-ignored) and set the name of your state bucket.
+#
+# Initialise each stack with it:
+#   cd terraform/<stack>
+#   terraform init -backend-config=../backend.hcl
+#
+# A stack that was initialised before this file existed needs -reconfigure.
+# Running init without it prompts for a bucket; entering a different name
+# points at a different (possibly empty) state.
 bucket = "<state-bucket-name>"

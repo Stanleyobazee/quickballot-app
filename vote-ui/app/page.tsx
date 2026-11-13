@@ -15,7 +15,7 @@ interface Poll {
 
 async function getPolls(): Promise<Poll[]> {
   try {
-    const baseUrl = process.env.VOTE_API_INTERNAL_URL || process.env.NEXT_PUBLIC_VOTE_API_URL;
+    const baseUrl = process.env.VOTE_API_INTERNAL_URL || "http://vote-api:8080";
     const res = await fetch(
       `${baseUrl}/api/polls`,
       { cache: "no-store" }
