@@ -1,0 +1,77 @@
+name: terraform-plan
+
+# Plan only. The AWS role trust policy accepts the pull_request subject, so
+# this workflow must not add other triggers.
+on:
+  pull_request:
+    paths:
+      - "terraform/**"
+      - ".github/workflows/terraform-plan.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  TF_VERSION: "1.17.0"
+
+jobs:
+  plan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        stack: [bootstrap, main, dns, ci]
+    concurrency:
+      group: terraform-plan-${{ github.event.pull_request.number }}-${{ matrix.stack }}
+      cancel-in-progress: true
+    env:
+      # Variables without defaults. Terraform ignores TF_VAR_* values that a
+      # stack does not declare.
+      TF_VAR_zone_name: ${{ vars.DNS_ZONE_NAME }}
+      TF_VAR_github_repository: ${{ github.repository }}
+    defaults:
+      run:
+        shell: bash
+        working-directory: terraform/${{ matrix.stack }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      - uses: hashicorp/setup-terraform@b9cd54a3c349d3f38e8881555d616ced269862dd # v3
+        with:
+          terraform_version: ${{ env.TF_VERSION }}
+          terraform_wrapper: false
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PLAN_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      # backend.hcl is git-ignored and exists only for the duration of the job.
+      - name: Write backend config
+        env:
+          STATE_BUCKET: ${{ vars.TF_STATE_BUCKET }}
+        run: printf 'bucket = "%s"\n' "$STATE_BUCKET" > ../backend.hcl
+
+      - name: Init
+        run: terraform init -backend-config=../backend.hcl -input=false
+
+      - name: Plan
+        run: |
+          set -o pipefail
+          terraform plan -input=false -lock-timeout=60s -no-color | tee plan.txt
+
+      - name: Summary
+        if: always()
+        run: |
+          {
+            echo "### terraform plan: ${{ matrix.stack }}"
+            if [ ! -f plan.txt ]; then
+              echo "Plan did not run."
+            elif grep -qE '^(Plan:|No changes\.)' plan.txt; then
+              grep -E '^(Plan:|No changes\.)' plan.txt
+            else
+              echo "Plan failed. See the Plan step log."
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
