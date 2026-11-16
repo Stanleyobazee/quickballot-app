@@ -3,6 +3,9 @@ data "aws_caller_identity" "current" {}
 locals {
   # Must match the bucket name in terraform/bootstrap
   state_bucket = "quickballot-tfstate-${data.aws_caller_identity.current.account_id}"
+
+  github_owner = split("/", var.github_repository)[0]
+  github_repo  = split("/", var.github_repository)[1]
 }
 
 # GitHub Actions OIDC identity provider. thumbprint_list is optional in
@@ -29,10 +32,12 @@ data "aws_iam_policy_document" "ci_plan_trust" {
       values   = ["sts.amazonaws.com"]
     }
 
+    # The subject contains the permanent numeric IDs of the owner and the
+    # repository, so a renamed or recreated repository cannot assume the role.
     condition {
       test     = "StringEquals"
       variable = "token.actions.githubusercontent.com:sub"
-      values   = ["repo:${var.github_repository}:pull_request"]
+      values   = ["repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repository_id}:pull_request"]
     }
   }
 }
