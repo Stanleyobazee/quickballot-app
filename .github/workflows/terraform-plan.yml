@@ -31,6 +31,8 @@ jobs:
       # stack does not declare.
       TF_VAR_zone_name: ${{ vars.DNS_ZONE_NAME }}
       TF_VAR_github_repository: ${{ github.repository }}
+      TF_VAR_github_owner_id: ${{ github.repository_owner_id }}
+      TF_VAR_github_repository_id: ${{ github.repository_id }}
     defaults:
       run:
         shell: bash
