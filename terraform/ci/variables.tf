@@ -19,3 +19,23 @@ variable "github_repository" {
     error_message = "github_repository must be in owner/repo form."
   }
 }
+
+variable "github_owner_id" {
+  description = "Numeric ID of the GitHub account or organization that owns the repository"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_owner_id))
+    error_message = "github_owner_id must contain digits only."
+  }
+}
+
+variable "github_repository_id" {
+  description = "Numeric ID of the GitHub repository"
+  type        = string
+
+  validation {
+    condition     = can(regex("^[0-9]+$", var.github_repository_id))
+    error_message = "github_repository_id must contain digits only."
+  }
+}
