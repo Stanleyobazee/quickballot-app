@@ -187,6 +187,15 @@ Running `init` without the file makes Terraform prompt for a bucket, and enterin
 - **Backend configuration:** the bucket name is supplied through a git-ignored `backend.hcl`, so it is not repeated in each stack or published in the repository.
 - **Vote integrity:** the voter token is created and stored in the browser, and a database uniqueness constraint rejects repeat submissions for the same token. This is friction against accidental duplicates, not verified one-person-one-vote, because clearing the token allows another vote. A stronger guarantee would need a voter identity or eligibility mechanism.
 
+### Container image findings
+
+Images are scanned with ECR basic scanning on push and rebuilt with `--pull`, so base-image patches are picked up. A finding with a fix available is fixed. A finding without a fix, or one that does not apply to how the image is used, is recorded here with the reason and a trigger for re-checking. ECR tags are immutable, so every rebuild gets a new tag (version plus commit hash).
+
+| Recorded | Image | Finding | Reason | Re-check when |
+|---|---|---|---|---|
+| 2026-11-17 | vote-ui 0.1.1 | 1 CRITICAL, CVE-2026-4738, reported against the Alpine package zlib 1.3.2-r1 | The CVE concerns the infback9 module in the zlib copy bundled with GDAL. The image does not contain GDAL, and the Alpine zlib package contains no infback9 files. Alpine already has zlib 1.4-r0, but the `node:24-alpine` base has not picked it up yet. | Rebuild with `--pull` when the base image is refreshed, push as 0.1.2, re-scan. |
+| 2026-11-17 | results-api 0.1.1 | 4 HIGH in the Debian base packages zlib and glibc (`python:3.12-slim`); also 9 MEDIUM and 3 LOW, not acted on individually | The installed versions equal the newest in the Debian repository, so no patched package exists yet. | At the next rebuild with `--pull`. |
+
 ---
 
 ## Author
