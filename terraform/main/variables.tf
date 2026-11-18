@@ -97,3 +97,33 @@ variable "ecr_force_delete" {
   type        = bool
   default     = false
 }
+
+variable "enable_database" {
+  description = "Create the PostgreSQL database (billed by the hour). Keep false when nothing uses it."
+  type        = bool
+  default     = false
+}
+
+variable "db_name" {
+  description = "Name of the initial database"
+  type        = string
+  default     = "quickballot"
+}
+
+variable "db_instance_class" {
+  description = "RDS instance class"
+  type        = string
+  default     = "db.t4g.micro"
+}
+
+variable "db_allocated_storage" {
+  description = "Allocated storage in GiB"
+  type        = number
+  default     = 20
+}
+
+variable "db_engine_version" {
+  description = "PostgreSQL engine version, matching the version used in docker-compose.yml"
+  type        = string
+  default     = "16"
+}

@@ -37,3 +37,18 @@ output "ecr_repository_urls" {
   description = "Repository URLs by service"
   value       = { for name, repo in aws_ecr_repository.service : name => repo.repository_url }
 }
+
+output "database_endpoint" {
+  description = "Connection endpoint of the database (null when enable_database is false)"
+  value       = one(aws_db_instance.main[*].endpoint)
+}
+
+output "database_security_group_id" {
+  description = "ID of the database security group (null when enable_database is false)"
+  value       = one(aws_security_group.database[*].id)
+}
+
+output "database_master_user_secret_arn" {
+  description = "ARN of the Secrets Manager secret holding the master password (null when enable_database is false)"
+  value       = one(aws_db_instance.main[*].master_user_secret[0].secret_arn)
+}
