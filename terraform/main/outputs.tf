@@ -52,3 +52,23 @@ output "database_master_user_secret_arn" {
   description = "ARN of the Secrets Manager secret holding the master password (null when enable_database is false)"
   value       = one(aws_db_instance.main[*].master_user_secret[0].secret_arn)
 }
+
+output "eks_cluster_name" {
+  description = "Name of the EKS cluster (null when enable_eks is false)"
+  value       = one(aws_eks_cluster.main[*].name)
+}
+
+output "eks_cluster_endpoint" {
+  description = "API server endpoint of the EKS cluster (null when enable_eks is false)"
+  value       = one(aws_eks_cluster.main[*].endpoint)
+}
+
+output "eks_cluster_security_group_id" {
+  description = "ID of the cluster primary security group (null when enable_eks is false)"
+  value       = one(aws_eks_cluster.main[*].vpc_config[0].cluster_security_group_id)
+}
+
+output "eks_update_kubeconfig_command" {
+  description = "Command that adds the cluster to the local kubeconfig (null when enable_eks is false)"
+  value       = var.enable_eks ? "aws eks update-kubeconfig --name ${aws_eks_cluster.main[0].name} --region ${var.region}" : null
+}

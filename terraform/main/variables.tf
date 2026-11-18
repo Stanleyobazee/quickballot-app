@@ -127,3 +127,54 @@ variable "db_engine_version" {
   type        = string
   default     = "16"
 }
+
+variable "enable_eks" {
+  description = "Create the EKS cluster and node group (billed by the hour). Requires enable_nat_gateway."
+  type        = bool
+  default     = false
+}
+
+variable "eks_cluster_version" {
+  description = "Kubernetes version of the EKS cluster"
+  type        = string
+  default     = "1.37"
+}
+
+variable "eks_node_instance_type" {
+  description = "Instance type of the managed node group"
+  type        = string
+  default     = "t3.medium"
+}
+
+variable "eks_node_count" {
+  description = "Number of nodes in the managed node group (minimum, desired and maximum)"
+  type        = number
+  default     = 2
+
+  validation {
+    condition     = var.eks_node_count >= 1
+    error_message = "eks_node_count must be at least 1."
+  }
+}
+
+variable "eks_admin_role_arn" {
+  description = "ARN of the IAM role that receives cluster administrator access. Required when enable_eks is true."
+  type        = string
+  default     = null
+}
+
+variable "eks_public_access_cidrs" {
+  description = "CIDR blocks allowed to reach the public cluster endpoint. Required when enable_eks is true; 0.0.0.0/0 is rejected."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for cidr in var.eks_public_access_cidrs : can(cidrhost(cidr, 0))])
+    error_message = "Every entry in eks_public_access_cidrs must be a valid CIDR block."
+  }
+
+  validation {
+    condition     = !contains(var.eks_public_access_cidrs, "0.0.0.0/0")
+    error_message = "eks_public_access_cidrs must not contain 0.0.0.0/0. List the specific ranges that need access."
+  }
+}
