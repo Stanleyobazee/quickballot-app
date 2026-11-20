@@ -8,7 +8,8 @@ resource "aws_db_subnet_group" "main" {
   }
 }
 
-# No ingress rules yet. The node security group is added here with EKS.
+# Ingress comes from the EKS cluster security group, added below when both
+# enable_database and enable_eks are true. Without EKS there are no ingress rules.
 resource "aws_security_group" "database" {
   count       = var.enable_database ? 1 : 0
   name        = "${var.project}-database"
@@ -18,6 +19,16 @@ resource "aws_security_group" "database" {
   tags = {
     Name = "${var.project}-database"
   }
+}
+
+resource "aws_vpc_security_group_ingress_rule" "database_from_eks" {
+  count                        = var.enable_database && var.enable_eks ? 1 : 0
+  security_group_id            = aws_security_group.database[0].id
+  referenced_security_group_id = aws_eks_cluster.main[0].vpc_config[0].cluster_security_group_id
+  ip_protocol                  = "tcp"
+  from_port                    = 5432
+  to_port                      = 5432
+  description                  = "PostgreSQL from the EKS cluster security group"
 }
 
 resource "aws_db_instance" "main" {

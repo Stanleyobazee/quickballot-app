@@ -4,3 +4,21 @@ misconfigurations:
       - "bootstrap/main.tf"
       - "terraform/bootstrap/main.tf"
     statement: "State bucket uses SSE-S3 instead of a customer-managed KMS key. Accepted for a short-lived, single-account, cost-controlled environment. Revisit if state ever holds secrets or the environment becomes long-lived."
+
+  - id: AWS-0039
+    paths:
+      - "main/eks.tf"
+      - "terraform/main/eks.tf"
+    statement: "EKS envelope-encrypts all Kubernetes API data by default with an AWS-owned key (Kubernetes 1.28 and later). A customer-managed key is the upgrade for a long-lived environment."
+
+  - id: AWS-0040
+    paths:
+      - "main/eks.tf"
+      - "terraform/main/eks.tf"
+    statement: "The API endpoint must be reachable from the operator's workstation, which is outside the VPC. Public access is limited to explicit CIDR ranges and 0.0.0.0/0 is rejected. A private-only endpoint would need a VPN or bastion host."
+
+  - id: AWS-0041
+    paths:
+      - "main/eks.tf"
+      - "terraform/main/eks.tf"
+    statement: "The API endpoint must be reachable from the operator's workstation, which is outside the VPC. Public access is limited to explicit CIDR ranges and 0.0.0.0/0 is rejected. A private-only endpoint would need a VPN or bastion host."
