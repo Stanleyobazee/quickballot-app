@@ -1,0 +1,19 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+# Applied by scripts/deploy-k8s.sh before the application. The schema file lives
+# outside this directory, so render with --load-restrictor=LoadRestrictionsNone.
+namespace: quickballot
+
+resources:
+  - job.yaml
+
+configMapGenerator:
+  - name: db-schema
+    files:
+      - schema.sql=../../scripts/schema.sql
+
+generatorOptions:
+  disableNameSuffixHash: true
+  labels:
+    app.kubernetes.io/part-of: quickballot
