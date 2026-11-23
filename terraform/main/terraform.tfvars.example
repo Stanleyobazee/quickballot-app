@@ -1,0 +1,5 @@
+# Real ARN of the cluster administrator role, including any path.
+# Look it up with:
+#   aws iam get-role --role-name <name> --query Role.Arn --output text
+# For an IAM Identity Center (SSO) role the ARN has the aws-reserved path; the path-less form is rejected.
+eks_admin_role_arn = "arn:aws:iam::<account>:role/aws-reserved/sso.amazonaws.com/<region>/AWSReservedSSO_<name>_<hash>"
