@@ -158,7 +158,7 @@ variable "eks_node_count" {
 }
 
 variable "eks_admin_role_arn" {
-  description = "ARN of the IAM role that receives cluster administrator access. Required when enable_eks is true."
+  description = "Real ARN of the IAM role that receives cluster administrator access, including any path. Required when enable_eks is true. For an IAM Identity Center (SSO) role this is arn:aws:iam::<account>:role/aws-reserved/sso.amazonaws.com/<region>/AWSReservedSSO_<name>_<hash>. EKS access entries do not accept the path-less form."
   type        = string
   default     = null
 }
