@@ -49,7 +49,8 @@ resource "aws_iam_role" "ci_plan" {
 }
 
 # Read access for terraform plan. The scope covers only the services the
-# stacks currently manage; extend it when EKS is added.
+# stacks manage (EC2/VPC, ECR, RDS, Route 53, ACM, IAM, EKS and its log group);
+# extend it when a stack adds a service.
 data "aws_iam_policy_document" "ci_plan_read" {
   statement {
     sid = "ReadInfrastructure"
@@ -62,6 +63,10 @@ data "aws_iam_policy_document" "ci_plan_read" {
       "ecr:GetRegistryScanningConfiguration",
       "rds:Describe*",
       "rds:ListTagsForResource",
+      "eks:Describe*",
+      "eks:List*",
+      "logs:Describe*",
+      "logs:ListTagsForResource",
       "route53:Get*",
       "route53:List*",
       "acm:Describe*",
