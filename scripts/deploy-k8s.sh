@@ -2,8 +2,8 @@
 # scripts/deploy-k8s.sh
 # Deploys QuickBallot to the current kubectl context. Safe to run repeatedly.
 #
-# Requires: aws, kubectl, terraform, envsubst, jq; terraform/main initialised
-# (terraform init -backend-config=../backend.hcl); enable_database = true applied.
+# Requires: aws, kubectl, helm, terraform, envsubst, jq; terraform/main initialised
+# (terraform init -backend-config=../backend.hcl); enable_database and enable_eks applied.
 # Optional: AWS_REGION (default eu-north-1), DB_NAME (default quickballot).
 # The database password is never printed or passed on a command line.
 set -euo pipefail
@@ -11,9 +11,12 @@ set -euo pipefail
 NAMESPACE=quickballot
 REGION="${AWS_REGION:-${AWS_DEFAULT_REGION:-eu-north-1}}"
 DB_NAME="${DB_NAME:-quickballot}"
+# Chart and controller versions match; keep in step with the IAM policy file in
+# terraform/main/policies/.
+ALB_CHART_VERSION=3.6.3
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 
-for tool in aws kubectl terraform envsubst jq; do
+for tool in aws kubectl helm terraform envsubst jq; do
   command -v "$tool" >/dev/null || { echo "Error: $tool is required." >&2; exit 1; }
 done
 
@@ -32,6 +35,8 @@ endpoint="$(tf_output database_endpoint)"
 db_host="${endpoint%%:*}"
 db_port="${endpoint##*:}"
 secret_arn="$(tf_output database_master_user_secret_arn)"
+cluster_name="$(tf_output eks_cluster_name)"
+vpc_id="$(tf_output vpc_id)"
 
 secret_json="$(aws secretsmanager get-secret-value --region "$REGION" \
   --secret-id "$secret_arn" --query SecretString --output text)"
@@ -65,6 +70,20 @@ if ! kubectl -n "$NAMESPACE" wait --for=condition=complete --timeout=300s job/db
   kubectl -n "$NAMESPACE" logs job/db-migrate --tail=50 >&2 || true
   exit 1
 fi
+
+echo "==> Installing the AWS Load Balancer Controller"
+helm repo add eks https://aws.github.io/eks-charts --force-update >/dev/null
+helm repo update eks >/dev/null
+helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
+  --namespace kube-system \
+  --version "$ALB_CHART_VERSION" \
+  --set clusterName="$cluster_name" \
+  --set region="$REGION" \
+  --set vpcId="$vpc_id" \
+  --set serviceAccount.create=true \
+  --set serviceAccount.name=aws-load-balancer-controller \
+  --set replicaCount=2
+kubectl -n kube-system rollout status deployment/aws-load-balancer-controller --timeout=300s
 
 echo "==> Applying application manifests"
 # envsubst needs the literal variable name, so the single quotes are intended.
