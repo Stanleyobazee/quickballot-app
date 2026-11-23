@@ -3,7 +3,8 @@
 # Deploys QuickBallot to the current kubectl context. Safe to run repeatedly.
 #
 # Requires: aws, kubectl, helm, terraform, envsubst, jq; terraform/main initialised
-# (terraform init -backend-config=../backend.hcl); enable_database and enable_eks applied.
+# (terraform init -backend-config=../backend.hcl), terraform/dns applied; enable_database
+# and enable_eks applied.
 # Optional: AWS_REGION (default eu-north-1), DB_NAME (default quickballot).
 # The database password is never printed or passed on a command line.
 set -euo pipefail
@@ -24,9 +25,10 @@ echo "==> Resolving AWS and database settings"
 account_id="$(aws sts get-caller-identity --query Account --output text)"
 export ECR_REGISTRY="${account_id}.dkr.ecr.${REGION}.amazonaws.com"
 
+# tf_output <name> [stack]; the stack defaults to main.
 tf_output() {
-  terraform -chdir="$ROOT/terraform/main" output -raw "$1" 2>/dev/null || {
-    echo "Error: terraform output '$1' is unavailable. Is enable_database applied and terraform initialised?" >&2
+  terraform -chdir="$ROOT/terraform/${2:-main}" output -raw "$1" 2>/dev/null || {
+    echo "Error: terraform output '$1' is unavailable in terraform/${2:-main}. Is it applied and initialised?" >&2
     exit 1
   }
 }
@@ -37,6 +39,8 @@ db_port="${endpoint##*:}"
 secret_arn="$(tf_output database_master_user_secret_arn)"
 cluster_name="$(tf_output eks_cluster_name)"
 vpc_id="$(tf_output vpc_id)"
+ACM_CERTIFICATE_ARN="$(tf_output certificate_arn dns)"
+export ACM_CERTIFICATE_ARN
 
 secret_json="$(aws secretsmanager get-secret-value --region "$REGION" \
   --secret-id "$secret_arn" --query SecretString --output text)"
@@ -88,12 +92,12 @@ kubectl -n kube-system rollout status deployment/aws-load-balancer-controller --
 echo "==> Applying application manifests"
 # envsubst needs the literal variable name, so the single quotes are intended.
 # shellcheck disable=SC2016
-kubectl kustomize "$ROOT/k8s/" | envsubst '$ECR_REGISTRY' | kubectl apply -f -
+kubectl kustomize "$ROOT/k8s/" | envsubst '$ECR_REGISTRY $ACM_CERTIFICATE_ARN' | kubectl apply -f -
 
 echo "==> Waiting for rollouts"
 for deployment in vote-api results-api vote-ui; do
   kubectl -n "$NAMESPACE" rollout status "deployment/$deployment" --timeout=300s
 done
 
-echo "==> Done. Load balancer address (may take a few minutes to appear):"
-kubectl -n "$NAMESPACE" get ingress quickballot
+echo "==> Publishing the DNS record"
+"$ROOT/scripts/dns-record.sh" up
