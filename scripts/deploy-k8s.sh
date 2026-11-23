@@ -78,6 +78,9 @@ fi
 echo "==> Installing the AWS Load Balancer Controller"
 helm repo add eks https://aws.github.io/eks-charts --force-update >/dev/null
 helm repo update eks >/dev/null
+# keepTLSSecret=true: by default the chart regenerates the webhook CA on every
+# upgrade, and running pods keep serving the old certificate, so the Ingress
+# webhook fails.
 helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-controller \
   --namespace kube-system \
   --version "$ALB_CHART_VERSION" \
@@ -86,7 +89,8 @@ helm upgrade --install aws-load-balancer-controller eks/aws-load-balancer-contro
   --set vpcId="$vpc_id" \
   --set serviceAccount.create=true \
   --set serviceAccount.name=aws-load-balancer-controller \
-  --set replicaCount=2
+  --set replicaCount=2 \
+  --set keepTLSSecret=true
 kubectl -n kube-system rollout status deployment/aws-load-balancer-controller --timeout=300s
 
 echo "==> Applying application manifests"
