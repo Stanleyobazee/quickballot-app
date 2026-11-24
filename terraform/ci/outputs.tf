@@ -7,3 +7,8 @@ output "oidc_provider_arn" {
   description = "ARN of the GitHub Actions OIDC provider"
   value       = aws_iam_openid_connect_provider.github.arn
 }
+
+output "ci_push_role_arn" {
+  description = "ARN of the role GitHub Actions assumes on the main branch to push images to ECR"
+  value       = aws_iam_role.ci_push.arn
+}
