@@ -46,7 +46,7 @@ jobs:
         run: |
           docker run -d --name test-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=quickballot \
             -p 127.0.0.1:5432:5432 postgres:16-alpine
-          timeout 60 sh -c 'until docker exec test-db pg_isready -U postgres -d quickballot; do sleep 1; done'
+          timeout 60 sh -c 'until docker exec test-db pg_isready -h 127.0.0.1 -U postgres -d quickballot; do sleep 1; done'
           docker exec -i test-db psql -v ON_ERROR_STOP=1 -U postgres -d quickballot < scripts/schema.sql
 
       - name: Maven verify
