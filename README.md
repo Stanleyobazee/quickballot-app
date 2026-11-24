@@ -200,13 +200,17 @@ Running `init` without the file makes Terraform prompt for a bucket, and enterin
 
 ### Container image findings
 
-Images are scanned with ECR basic scanning on push and rebuilt with `--pull`, so base-image patches are picked up. A finding with a fix available is fixed. A finding without a fix, or one that does not apply to how the image is used, is recorded here with the reason and a trigger for re-checking. ECR tags are immutable, so every rebuild gets a new tag (version plus commit hash).
+Images are scanned with ECR basic scanning on push and rebuilt with `--pull`, so base-image patches are picked up. A finding with a fix available is fixed. A finding without a fix, or one that does not apply to how the image is used, is recorded here with the reason and a trigger for re-checking. ECR tags are immutable, so every rebuild gets a new tag (version plus commit hash). The ECR scan covers OS packages only, while CI also reports library findings from Trivy.
 
 | Recorded | Image | Finding | Reason | Re-check when |
 |---|---|---|---|---|
 | 2026-11-17 | vote-ui 0.1.1 | 1 CRITICAL, CVE-2026-4738, reported against the Alpine package zlib 1.3.2-r1 | The CVE concerns the infback9 module in the zlib copy bundled with GDAL. The image does not contain GDAL, and the Alpine zlib package contains no infback9 files. Alpine already has zlib 1.4-r0, but the `node:24-alpine` base has not picked it up yet. | Rebuild with `--pull` when the base image is refreshed, push as 0.1.2, re-scan. |
-| 2026-11-17 | results-api 0.1.1 | 4 HIGH in the Debian base packages zlib and glibc (`python:3.12-slim`); also 9 MEDIUM and 3 LOW, not acted on individually | The installed versions equal the newest in the Debian repository, so no patched package exists yet. | At the next rebuild with `--pull`. |
+| 2026-11-17 | results-api 0.1.1 | 4 HIGH in the Debian base packages zlib and glibc (`python:3.12-slim`); also 9 MEDIUM and 3 LOW, not acted on individually | The glibc findings have no patched package yet. zlib1g now has a Debian fix and clears on a rebuild with `--pull`. | At the next rebuild with `--pull`. |
 | 2026-11-23 | vote-api 0.1.1 | 1 CRITICAL (CVE-2026-4738, zlib); 4 HIGH in openssl (CVE-2026-95691, CVE-2026-88823, CVE-2026-95692, CVE-2026-107496); 1 HIGH in libfontenc (CVE-2026-109908); 4 MEDIUM | All are Alpine base-image packages; none are in application dependencies. | Rebuild with `--pull` on a refreshed base image. |
+
+### Dependency findings
+
+CI reports fixable HIGH and CRITICAL library findings from Trivy without failing the build. They come from these versions: Spring Boot 4.0.0 (vote-api), Next.js 14.2.35 (vote-ui), and fastapi 0.115.0 with starlette 0.38.6 (results-api). Upgrades are planned as separate changes; the CI step becomes a gate once they land.
 
 ---
 

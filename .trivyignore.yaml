@@ -22,3 +22,30 @@ misconfigurations:
       - "main/eks.tf"
       - "terraform/main/eks.tf"
     statement: "The API endpoint must be reachable from the operator's workstation, which is outside the VPC. Public access is limited to explicit CIDR ranges and 0.0.0.0/0 is rejected. A private-only endpoint would need a VPN or bastion host."
+
+# Accepted image findings. Each entry expires so that it is re-checked; the
+# reasons are recorded in the "Container image findings" table in README.md.
+vulnerabilities:
+  - id: CVE-2026-4738
+    statement: "zlib in the Alpine base image of vote-ui and vote-api. The CVE concerns the infback9 module in the zlib copy bundled with GDAL; the images do not contain GDAL and the Alpine zlib package has no infback9 files. Fixed in Alpine zlib 1.4-r0; clears with a rebuild on a refreshed base image."
+    expired_at: 2027-01-23
+
+  - id: CVE-2026-95691
+    statement: "openssl in the Alpine base image of vote-api, not an application dependency. Clears with a rebuild with --pull on a refreshed base image."
+    expired_at: 2027-01-23
+
+  - id: CVE-2026-88823
+    statement: "openssl in the Alpine base image of vote-api, not an application dependency. Clears with a rebuild with --pull on a refreshed base image."
+    expired_at: 2027-01-23
+
+  - id: CVE-2026-95692
+    statement: "openssl in the Alpine base image of vote-api, not an application dependency. Clears with a rebuild with --pull on a refreshed base image."
+    expired_at: 2027-01-23
+
+  - id: CVE-2026-107496
+    statement: "openssl in the Alpine base image of vote-api, not an application dependency. Clears with a rebuild with --pull on a refreshed base image."
+    expired_at: 2027-01-23
+
+  - id: CVE-2026-109908
+    statement: "libfontenc in the Alpine base image of vote-api, not an application dependency. Clears with a rebuild with --pull on a refreshed base image."
+    expired_at: 2027-01-23

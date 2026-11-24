@@ -1,0 +1,130 @@
+name: app-ci
+
+on:
+  pull_request:
+    branches: [main]
+    paths:
+      - "vote-ui/**"
+      - "vote-api/**"
+      - "results-api/**"
+      - ".github/workflows/app-ci.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  ci:
+    name: ${{ matrix.service }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: [vote-ui, vote-api, results-api]
+    concurrency:
+      group: app-ci-${{ github.event.pull_request.number }}-${{ matrix.service }}
+      cancel-in-progress: true
+    env:
+      IMAGE: quickballot/${{ matrix.service }}:ci
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+
+      # ── vote-api: Maven verify ──────────────────────────────────────────
+      - name: Set up Java
+        if: matrix.service == 'vote-api'
+        uses: actions/setup-java@d1374f8ac74474200d16ef8ecee22c7ae7a51880 # v6.3.0
+        with:
+          distribution: temurin
+          java-version: "21"
+          cache: maven
+          cache-dependency-path: vote-api/pom.xml
+
+      # The context test needs a database; the values match the defaults in
+      # application.properties. The container is discarded with the runner.
+      - name: Start PostgreSQL for the tests
+        if: matrix.service == 'vote-api'
+        run: |
+          docker run -d --name test-db -e POSTGRES_PASSWORD=postgres -e POSTGRES_DB=quickballot \
+            -p 127.0.0.1:5432:5432 postgres:16-alpine
+          timeout 60 sh -c 'until docker exec test-db pg_isready -h 127.0.0.1 -U postgres -d quickballot; do sleep 1; done'
+          docker exec -i test-db psql -v ON_ERROR_STOP=1 -U postgres -d quickballot < scripts/schema.sql
+
+      - name: Maven verify
+        if: matrix.service == 'vote-api'
+        working-directory: vote-api
+        run: ./mvnw -B verify
+
+      # ── results-api: import check ───────────────────────────────────────
+      - name: Set up Python
+        if: matrix.service == 'results-api'
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.12"
+          cache: pip
+          cache-dependency-path: results-api/requirements.txt
+
+      # The repository has no tests for this service, so the check is a syntax
+      # and import check.
+      - name: Install dependencies and check imports
+        if: matrix.service == 'results-api'
+        working-directory: results-api
+        run: |
+          pip install -r requirements.txt
+          python -m compileall -q .
+          python -c "import main"
+
+      # ── vote-ui: lint and build ─────────────────────────────────────────
+      - name: Set up Node.js
+        if: matrix.service == 'vote-ui'
+        uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7.1.0
+        with:
+          node-version: "24"
+          cache: npm
+          cache-dependency-path: vote-ui/package-lock.json
+
+      - name: Install, lint and build
+        if: matrix.service == 'vote-ui'
+        working-directory: vote-ui
+        run: |
+          npm ci
+          npm run lint
+          npm run build
+
+      # ── Image build and scan (nothing is pushed) ────────────────────────
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.service }}
+          platforms: linux/amd64
+          pull: true
+          push: false
+          load: true
+          tags: ${{ env.IMAGE }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      # Accepted findings are listed with an expiry date in .trivyignore.yaml.
+      - name: Scan OS packages (gate)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          vuln-type: os
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          trivyignores: .trivyignore.yaml
+
+      # Library findings are tracked for dependency upgrades; this step becomes
+      # a gate once those land.
+      - name: Scan libraries (report only)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: ${{ env.IMAGE }}
+          vuln-type: library
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "0"
+          format: table
