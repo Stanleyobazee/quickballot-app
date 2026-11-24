@@ -6,6 +6,11 @@ locals {
 
   github_owner = split("/", var.github_repository)[0]
   github_repo  = split("/", var.github_repository)[1]
+
+  ecr_repository_arns = [
+    for name in ["vote-ui", "vote-api", "results-api"] :
+    "arn:aws:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/${var.project}/${name}"
+  ]
 }
 
 # GitHub Actions OIDC identity provider. thumbprint_list is optional in
@@ -117,4 +122,67 @@ resource "aws_iam_role_policy" "ci_plan_state" {
   name   = "state-bucket-access"
   role   = aws_iam_role.ci_plan.id
   policy = data.aws_iam_policy_document.ci_plan_state.json
+}
+
+# Role for pushing the application images to ECR. It is separate from the plan
+# role because it can write: the plan role is read-only and any pull request can
+# assume it, while this role is limited to workflow runs on the main branch.
+data "aws_iam_policy_document" "ci_push_trust" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repository_id}:ref:refs/heads/main"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ci_push" {
+  name                 = "${var.project}-ci-push"
+  assume_role_policy   = data.aws_iam_policy_document.ci_push_trust.json
+  max_session_duration = 3600
+}
+
+data "aws_iam_policy_document" "ci_push" {
+  statement {
+    sid       = "EcrLogin"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  statement {
+    sid = "PushApplicationImages"
+    actions = [
+      "ecr:BatchCheckLayerAvailability",
+      "ecr:InitiateLayerUpload",
+      "ecr:UploadLayerPart",
+      "ecr:CompleteLayerUpload",
+      "ecr:PutImage",
+      "ecr:BatchGetImage",
+      "ecr:GetDownloadUrlForLayer",
+      "ecr:DescribeImages",
+      "ecr:DescribeImageScanFindings",
+      "ecr:StartImageScan",
+    ]
+    resources = local.ecr_repository_arns
+  }
+}
+
+resource "aws_iam_role_policy" "ci_push" {
+  name   = "ecr-push"
+  role   = aws_iam_role.ci_push.id
+  policy = data.aws_iam_policy_document.ci_push.json
 }

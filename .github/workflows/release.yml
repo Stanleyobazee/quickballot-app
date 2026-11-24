@@ -1,0 +1,149 @@
+name: release
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - "vote-ui/**"
+      - "vote-api/**"
+      - "results-api/**"
+      - ".github/workflows/release.yml"
+
+permissions:
+  id-token: write
+  contents: read
+
+jobs:
+  detect:
+    name: detect changed services
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      services: ${{ steps.changed.outputs.services }}
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+
+      # Compares the pushed range. A new branch or an unknown base commit
+      # (for example after a force push) selects every service.
+      - name: Detect changed service folders
+        id: changed
+        env:
+          BEFORE: ${{ github.event.before }}
+          AFTER: ${{ github.sha }}
+        run: |
+          services=(vote-ui vote-api results-api)
+          selected=()
+          if [ "$BEFORE" = "0000000000000000000000000000000000000000" ] \
+            || ! git cat-file -e "${BEFORE}^{commit}" 2>/dev/null; then
+            selected=("${services[@]}")
+          else
+            changed="$(git diff --name-only "$BEFORE" "$AFTER")"
+            for service in "${services[@]}"; do
+              if grep -q "^${service}/" <<<"$changed"; then
+                selected+=("$service")
+              fi
+            done
+          fi
+          json="$(printf '%s\n' "${selected[@]}" | jq -R . | jq -cs 'map(select(length > 0))')"
+          echo "services=$json" >> "$GITHUB_OUTPUT"
+          echo "Services to release: $json"
+
+  release:
+    name: release ${{ matrix.service }}
+    needs: detect
+    if: needs.detect.outputs.services != '[]'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        service: ${{ fromJSON(needs.detect.outputs.services) }}
+    concurrency:
+      group: release-${{ matrix.service }}
+      cancel-in-progress: false
+    env:
+      # Plain image manifests: no provenance or SBOM attestations.
+      BUILDX_NO_DEFAULT_ATTESTATIONS: "1"
+      AWS_REGION: eu-north-1
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Set image tag
+        id: meta
+        run: |
+          tag="${GITHUB_SHA::12}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "image=quickballot/${{ matrix.service }}:$tag" >> "$GITHUB_OUTPUT"
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+
+      - name: Build image
+        uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        with:
+          context: ${{ matrix.service }}
+          platforms: linux/amd64
+          pull: true
+          push: false
+          load: true
+          provenance: false
+          sbom: false
+          tags: ${{ steps.meta.outputs.image }}
+          cache-from: type=gha,scope=${{ matrix.service }}
+          cache-to: type=gha,mode=max,scope=${{ matrix.service }}
+
+      # The gate runs before any credentials are configured or anything is pushed.
+      - name: Scan OS packages (gate)
+        uses: aquasecurity/trivy-action@57a97c7e7821a5776cebc9bb87c984fa69cba8f1 # v0.35.0
+        with:
+          image-ref: ${{ steps.meta.outputs.image }}
+          vuln-type: os
+          severity: HIGH,CRITICAL
+          ignore-unfixed: true
+          exit-code: "1"
+          format: table
+          trivyignores: .trivyignore.yaml
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_PUSH_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - name: Log in to ECR
+        id: ecr
+        uses: aws-actions/amazon-ecr-login@7290e214a610b32bc0eef81748948b6d466a8783 # v2.2.0
+
+      # ECR tags are immutable, so a re-run for the same commit skips the push.
+      - name: Check for an existing tag
+        id: exists
+        env:
+          REPOSITORY: quickballot/${{ matrix.service }}
+          TAG: ${{ steps.meta.outputs.tag }}
+        run: |
+          if aws ecr describe-images --repository-name "$REPOSITORY" \
+            --image-ids "imageTag=$TAG" >/dev/null 2>&1; then
+            echo "exists=true" >> "$GITHUB_OUTPUT"
+            echo "Tag $TAG already exists in $REPOSITORY; skipping the push."
+          else
+            echo "exists=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Push image
+        if: steps.exists.outputs.exists != 'true'
+        env:
+          LOCAL_IMAGE: ${{ steps.meta.outputs.image }}
+          REMOTE_IMAGE: ${{ steps.ecr.outputs.registry }}/quickballot/${{ matrix.service }}:${{ steps.meta.outputs.tag }}
+        run: |
+          docker tag "$LOCAL_IMAGE" "$REMOTE_IMAGE"
+          docker push "$REMOTE_IMAGE"
+
+      - name: Log out of Docker
+        if: always() && steps.ecr.outcome == 'success'
+        env:
+          REGISTRY: ${{ steps.ecr.outputs.registry }}
+        run: docker logout "$REGISTRY"
