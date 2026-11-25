@@ -208,6 +208,8 @@ Images are scanned with ECR basic scanning on push and rebuilt with `--pull`, so
 | 2026-11-17 | results-api 0.1.1 | 4 HIGH in the Debian base packages zlib and glibc (`python:3.12-slim`); also 9 MEDIUM and 3 LOW, not acted on individually | The glibc findings have no patched package yet. zlib1g now has a Debian fix and clears on a rebuild with `--pull`. | At the next rebuild with `--pull`. |
 | 2026-11-23 | vote-api 0.1.1 | 1 CRITICAL (CVE-2026-4738, zlib); 4 HIGH in openssl (CVE-2026-95691, CVE-2026-88823, CVE-2026-95692, CVE-2026-107496); 1 HIGH in libfontenc (CVE-2026-109908); 4 MEDIUM | All are Alpine base-image packages; none are in application dependencies. | Rebuild with `--pull` on a refreshed base image. |
 
+CVE-2026-124851 (libzstd1 in the results-api base image) was fixed on 2026-11-25 by a package upgrade in the Dockerfile.
+
 ### Dependency findings
 
 CI reports fixable HIGH and CRITICAL library findings from Trivy without failing the build. They come from these versions: Spring Boot 4.0.0 (vote-api), Next.js 14.2.35 (vote-ui), and fastapi 0.115.0 with starlette 0.38.6 (results-api). Upgrades are planned as separate changes; the CI step becomes a gate once they land.
