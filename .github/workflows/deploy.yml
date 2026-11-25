@@ -1,0 +1,244 @@
+name: deploy
+
+# Updates the container images of the three Deployments in the cluster. It does
+# not apply manifests, create the namespace or touch secrets or the migration
+# Job; scripts/deploy-k8s.sh does that.
+on:
+  workflow_dispatch:
+    inputs:
+      vote_ui_tag:
+        description: "vote-ui image tag (12 hex characters). Blank leaves the service unchanged."
+        type: string
+        required: false
+        default: ""
+      vote_api_tag:
+        description: "vote-api image tag (12 hex characters). Blank leaves the service unchanged."
+        type: string
+        required: false
+        default: ""
+      results_api_tag:
+        description: "results-api image tag (12 hex characters). Blank leaves the service unchanged."
+        type: string
+        required: false
+        default: ""
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: deploy-production
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    environment: production
+    env:
+      AWS_REGION: eu-north-1
+      CLUSTER_NAME: quickballot-eks
+      NAMESPACE: quickballot
+      APP_URL: https://vote.cloud-itgen.de
+    steps:
+      - name: Validate inputs
+        env:
+          VOTE_UI_TAG: ${{ inputs.vote_ui_tag }}
+          VOTE_API_TAG: ${{ inputs.vote_api_tag }}
+          RESULTS_API_TAG: ${{ inputs.results_api_tag }}
+        run: |
+          requested="$RUNNER_TEMP/requested.txt"
+          : > "$requested"
+          check() {
+            local service="$1" tag="$2"
+            [ -z "$tag" ] && return 0
+            if [[ ! "$tag" =~ ^[0-9a-f]{12}$ ]]; then
+              echo "::error::The tag for $service must be 12 lowercase hex characters."
+              exit 1
+            fi
+            echo "$service $tag" >> "$requested"
+          }
+          check vote-ui "$VOTE_UI_TAG"
+          check vote-api "$VOTE_API_TAG"
+          check results-api "$RESULTS_API_TAG"
+          if [ ! -s "$requested" ]; then
+            echo "::error::Provide at least one image tag."
+            exit 1
+          fi
+
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      # Shared by the allow-list steps below.
+      - name: Write helpers
+        run: |
+          cat > "$RUNNER_TEMP/eks-wait.sh" <<'HELPER'
+          # wait_update <update-id>: waits for an EKS update to succeed, then for the cluster to be active.
+          wait_update() {
+            local id="$1" status=""
+            for _ in $(seq 1 60); do
+              status="$(aws eks describe-update --name "$CLUSTER_NAME" --update-id "$id" \
+                --query update.status --output text)"
+              case "$status" in
+                Successful) break ;;
+                Failed | Cancelled)
+                  echo "::error::The cluster update ended with status $status."
+                  return 1
+                  ;;
+              esac
+              sleep 15
+            done
+            if [ "$status" != Successful ]; then
+              echo "::error::Timed out waiting for the cluster update."
+              return 1
+            fi
+            aws eks wait cluster-active --name "$CLUSTER_NAME"
+          }
+          HELPER
+
+      - uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          role-to-assume: ${{ vars.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: eu-north-1
+
+      - name: Check that the cluster is running
+        run: |
+          if ! output="$(aws eks describe-cluster --name "$CLUSTER_NAME" --query cluster.status --output text 2>&1)"; then
+            if grep -q ResourceNotFoundException <<<"$output"; then
+              echo "::error::Cluster $CLUSTER_NAME does not exist. It is not running; bring it up with scripts/deploy-k8s.sh."
+            else
+              echo "::error::Could not describe cluster $CLUSTER_NAME."
+              echo "$output"
+            fi
+            exit 1
+          fi
+          if [ "$output" != ACTIVE ]; then
+            echo "::error::Cluster $CLUSTER_NAME is $output, not ACTIVE."
+            exit 1
+          fi
+
+      - name: Check that the image tags exist
+        run: |
+          while read -r service tag; do
+            if ! aws ecr describe-images --repository-name "quickballot/$service" \
+              --image-ids "imageTag=$tag" >/dev/null 2>&1; then
+              echo "::error::No image with the given tag exists in quickballot/$service."
+              exit 1
+            fi
+          done < "$RUNNER_TEMP/requested.txt"
+
+      - name: Save the endpoint allow-list
+        run: |
+          aws eks describe-cluster --name "$CLUSTER_NAME" \
+            --query cluster.resourcesVpcConfig.publicAccessCidrs --output json \
+            > "$RUNNER_TEMP/original-cidrs.json"
+
+      - name: Allow the runner address
+        run: |
+          # shellcheck source=/dev/null
+          source "$RUNNER_TEMP/eks-wait.sh"
+          runner_ip="$(curl -fsS --max-time 10 https://checkip.amazonaws.com | tr -d '[:space:]')"
+          if [[ ! "$runner_ip" =~ ^([0-9]{1,3}\.){3}[0-9]{1,3}$ ]]; then
+            echo "::error::Could not determine the runner address."
+            exit 1
+          fi
+          if jq -e --arg ip "$runner_ip/32" 'index($ip) != null' "$RUNNER_TEMP/original-cidrs.json" >/dev/null; then
+            echo "The runner address is already allowed."
+            exit 0
+          fi
+          # Set before the update call so that the restore step runs even if the call is interrupted.
+          echo "CIDR_CHANGED=true" >> "$GITHUB_ENV"
+          cidrs="$(jq -r --arg ip "$runner_ip/32" '. + [$ip] | join(",")' "$RUNNER_TEMP/original-cidrs.json")"
+          update_id="$(aws eks update-cluster-config --name "$CLUSTER_NAME" \
+            --resources-vpc-config "publicAccessCidrs=$cidrs" --query update.id --output text)"
+          wait_update "$update_id"
+
+      - name: Configure kubectl
+        run: aws eks update-kubeconfig --name "$CLUSTER_NAME" --region "$AWS_REGION"
+
+      - name: Set images
+        id: set
+        run: |
+          account="$(aws sts get-caller-identity --query Account --output text)"
+          registry="$account.dkr.ecr.$AWS_REGION.amazonaws.com"
+          : > "$RUNNER_TEMP/changed.txt"
+          while read -r service tag; do
+            image="$registry/quickballot/$service:$tag"
+            current="$(kubectl -n "$NAMESPACE" get "deployment/$service" -o json \
+              | jq -r --arg c "$service" '.spec.template.spec.containers[] | select(.name == $c) | .image')"
+            if [ "$current" = "$image" ]; then
+              echo "$service is already at $tag."
+              continue
+            fi
+            kubectl -n "$NAMESPACE" set image "deployment/$service" "$service=$image"
+            echo "$service" >> "$RUNNER_TEMP/changed.txt"
+          done < "$RUNNER_TEMP/requested.txt"
+
+      - name: Wait for rollouts
+        id: rollout
+        run: |
+          while read -r service _; do
+            kubectl -n "$NAMESPACE" rollout status "deployment/$service" --timeout=300s
+          done < "$RUNNER_TEMP/requested.txt"
+
+      - name: Smoke test
+        id: smoke
+        run: |
+          for attempt in $(seq 1 10); do
+            code="$(curl -s -o /dev/null -w '%{http_code}' --max-time 10 "$APP_URL/api/health" || true)"
+            if [ "$code" = 200 ]; then
+              echo "Health check returned 200."
+              exit 0
+            fi
+            echo "Attempt $attempt: status $code."
+            sleep 10
+          done
+          echo "::error::The health check did not return 200."
+          exit 1
+
+      # Only Deployments changed by this run are rolled back.
+      - name: Roll back on failure
+        if: failure() && (steps.set.outcome == 'failure' || steps.rollout.outcome == 'failure' || steps.smoke.outcome == 'failure')
+        run: |
+          while read -r service; do
+            kubectl -n "$NAMESPACE" rollout undo "deployment/$service"
+            kubectl -n "$NAMESPACE" rollout status "deployment/$service" --timeout=300s || true
+          done < "$RUNNER_TEMP/changed.txt"
+          echo "::error::Deployment failed; the changed Deployments were rolled back."
+
+      - name: Summary
+        run: |
+          {
+            echo "### Deployed image tags"
+            echo "| Service | Tag |"
+            echo "|---|---|"
+            for service in vote-ui vote-api results-api; do
+              image="$(kubectl -n "$NAMESPACE" get "deployment/$service" -o json \
+                | jq -r --arg c "$service" '.spec.template.spec.containers[] | select(.name == $c) | .image')"
+              echo "| $service | ${image##*:} |"
+            done
+          } >> "$GITHUB_STEP_SUMMARY"
+
+      # Runs even after failures or a cancellation. It does nothing if the allow-list was not changed.
+      - name: Restore the endpoint allow-list
+        if: always()
+        run: |
+          if [ "${CIDR_CHANGED:-}" != true ]; then
+            echo "The allow-list was not changed; nothing to restore."
+            exit 0
+          fi
+          # shellcheck source=/dev/null
+          source "$RUNNER_TEMP/eks-wait.sh"
+          original="$RUNNER_TEMP/original-cidrs.json"
+          aws eks wait cluster-active --name "$CLUSTER_NAME"
+          current="$(aws eks describe-cluster --name "$CLUSTER_NAME" \
+            --query cluster.resourcesVpcConfig.publicAccessCidrs --output json)"
+          if [ "$(jq -c 'sort' <<<"$current")" = "$(jq -c 'sort' "$original")" ]; then
+            echo "The allow-list already matches the original."
+            exit 0
+          fi
+          update_id="$(aws eks update-cluster-config --name "$CLUSTER_NAME" \
+            --resources-vpc-config "publicAccessCidrs=$(jq -r 'join(",")' "$original")" \
+            --query update.id --output text)"
+          wait_update "$update_id"

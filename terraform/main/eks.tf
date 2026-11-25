@@ -1,3 +1,5 @@
+data "aws_caller_identity" "current" {}
+
 locals {
   eks_name = "${var.project}-eks"
 
@@ -111,6 +113,29 @@ resource "aws_eks_access_policy_association" "admin" {
 
   access_scope {
     type = "cluster"
+  }
+}
+
+# ── Deploy role for CI ──────────────────────────────────────────────────────
+
+# Lets the deploy workflow update the application Deployments. The ci stack
+# must be applied first because the role has to exist.
+resource "aws_eks_access_entry" "ci_deploy" {
+  count         = var.enable_eks ? 1 : 0
+  cluster_name  = aws_eks_cluster.main[0].name
+  principal_arn = "arn:aws:iam::${data.aws_caller_identity.current.account_id}:role/${var.project}-ci-deploy"
+  type          = "STANDARD"
+}
+
+resource "aws_eks_access_policy_association" "ci_deploy" {
+  count         = var.enable_eks ? 1 : 0
+  cluster_name  = aws_eks_cluster.main[0].name
+  principal_arn = aws_eks_access_entry.ci_deploy[0].principal_arn
+  policy_arn    = "arn:aws:eks::aws:cluster-access-policy/AmazonEKSEditPolicy"
+
+  access_scope {
+    type       = "namespace"
+    namespaces = ["quickballot"]
   }
 }
 
