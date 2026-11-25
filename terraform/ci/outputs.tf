@@ -12,3 +12,8 @@ output "ci_push_role_arn" {
   description = "ARN of the role GitHub Actions assumes on the main branch to push images to ECR"
   value       = aws_iam_role.ci_push.arn
 }
+
+output "ci_deploy_role_arn" {
+  description = "ARN of the role the production deploy workflow assumes to update the cluster"
+  value       = aws_iam_role.ci_deploy.arn
+}

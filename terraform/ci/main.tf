@@ -7,6 +7,9 @@ locals {
   github_owner = split("/", var.github_repository)[0]
   github_repo  = split("/", var.github_repository)[1]
 
+  # Must match local.eks_name in terraform/main
+  eks_cluster_arn = "arn:aws:eks:${var.region}:${data.aws_caller_identity.current.account_id}:cluster/${var.project}-eks"
+
   ecr_repository_arns = [
     for name in ["vote-ui", "vote-api", "results-api"] :
     "arn:aws:ecr:${var.region}:${data.aws_caller_identity.current.account_id}:repository/${var.project}/${name}"
@@ -185,4 +188,62 @@ resource "aws_iam_role_policy" "ci_push" {
   name   = "ecr-push"
   role   = aws_iam_role.ci_push.id
   policy = data.aws_iam_policy_document.ci_push.json
+}
+
+# Role for deploying new image tags to the cluster from the manual deploy
+# workflow. Only runs that use the protected GitHub environment "production"
+# (required reviewer) can assume it.
+data "aws_iam_policy_document" "ci_deploy_trust" {
+  statement {
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [aws_iam_openid_connect_provider.github.arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = ["repo:${local.github_owner}@${var.github_owner_id}/${local.github_repo}@${var.github_repository_id}:environment:production"]
+    }
+  }
+}
+
+resource "aws_iam_role" "ci_deploy" {
+  name                 = "${var.project}-ci-deploy"
+  assume_role_policy   = data.aws_iam_policy_document.ci_deploy_trust.json
+  max_session_duration = 3600
+}
+
+data "aws_iam_policy_document" "ci_deploy" {
+  # UpdateClusterConfig lets the workflow add the runner address to the public
+  # endpoint allow-list for the duration of a deployment and restore it after.
+  statement {
+    sid = "ClusterAccessAndAllowList"
+    actions = [
+      "eks:DescribeCluster",
+      "eks:UpdateClusterConfig",
+      "eks:DescribeUpdate",
+    ]
+    resources = [local.eks_cluster_arn]
+  }
+
+  statement {
+    sid       = "CheckImageTags"
+    actions   = ["ecr:DescribeImages"]
+    resources = local.ecr_repository_arns
+  }
+}
+
+resource "aws_iam_role_policy" "ci_deploy" {
+  name   = "eks-deploy"
+  role   = aws_iam_role.ci_deploy.id
+  policy = data.aws_iam_policy_document.ci_deploy.json
 }
